@@ -1,0 +1,47 @@
+{
+  "name": "ss1-placement-test",
+  "version": "1.7.0",
+  "description": "SS1 Department Placement Test System — Lagos State Senior Model College, Ojo",
+  "main": "main.js",
+  "author": "Lagos State Senior Model College Ojo",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win"
+  },
+  "build": {
+    "appId": "ng.gov.lagos.lssmc.ss1placement",
+    "productName": "SS1 Placement Test",
+    "copyright": "Copyright © Lagos State Senior Model College Ojo",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "index.html",
+      "main.js",
+      "preload.js"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "SS1_Placement_Test_Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "SS1 Placement Test",
+      "uninstallDisplayName": "SS1 Placement Test - LSSMC Ojo"
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  }
+}
