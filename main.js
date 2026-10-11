@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, shell, dialog } = require('electron');
 const path = require('path');
 
 let mainWindow;
@@ -20,14 +20,14 @@ function createWindow() {
     show: false
   });
 
-  mainWindow.loadFile('index.html');
+  mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (url.startsWith('https://') || url.startsWith('http://')) shell.openExternal(url);
     return { action: 'deny' };
   });
 
@@ -56,12 +56,11 @@ function createWindow() {
         {
           label: 'About',
           click: () => {
-            const { dialog } = require('electron');
             dialog.showMessageBox(mainWindow, {
               type: 'info',
               title: 'About',
               message: 'SS1 Department Placement Test System',
-              detail: 'Lagos State Senior Model College, Ojo\nVersion 1.7.0\n\nOffline placement examination system for Science, Art and Commercial departments.'
+              detail: 'Lagos State Senior Model College, Ojo\nVersion 1.11.1\n\nOffline placement examination system for Science, Art and Commercial departments.'
             });
           }
         }

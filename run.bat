@@ -1,11 +1,23 @@
 @echo off
-title Lagos State Senior Model College Ojo - SS1 Placement Test
-echo Starting application...
-python app.py
+setlocal
+cd /d "%~dp0"
+title SS1 Placement Test - Development Launcher
+where npm >nul 2>&1
 if errorlevel 1 (
-    echo.
-    echo Python not found or an error occurred.
-    echo Make sure Python is installed and added to PATH.
-    echo Then run:  pip install -r requirements.txt
-    pause
+  echo ERROR: Node.js and npm are required. Install Node.js 20 or newer.
+  pause
+  exit /b 1
 )
+if not exist node_modules\electron (
+  echo Installing app dependencies...
+  call npm ci
+  if errorlevel 1 goto :failed
+)
+call npm start
+if errorlevel 1 goto :failed
+exit /b 0
+:failed
+echo.
+echo Application launch failed. Review the error above.
+pause
+exit /b 1
