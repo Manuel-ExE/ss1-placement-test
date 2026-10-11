@@ -1,6 +1,9 @@
 name: Build Windows Installer
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     tags:
       - 'v*'
@@ -17,28 +20,30 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
+          cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Test application source
+        run: npm test
 
       - name: Build Windows Setup
         run: npm run dist
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Setup Installer
         uses: actions/upload-artifact@v4
         with:
           name: SS1_Placement_Test_Setup
-          path: dist/*.exe
+          path: dist/SS1_Placement_Test_Setup.exe
           if-no-files-found: error
 
       - name: Create Release (on tags)
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.exe
+          files: dist/SS1_Placement_Test_Setup.exe
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
