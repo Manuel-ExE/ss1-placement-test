@@ -238,17 +238,120 @@ class StudentDashboard(ctk.CTkFrame):
             self.user["id"], self.test_department, score, total, answers_json
         )
 
-        eligible = percentage >= PASS_MARK
-        msg = (
-            f"Test Completed!\n\n"
-            f"Preferred Department: {self.test_department}\n"
-            f"Score: {score} / {total}\n"
-            f"Percentage: {percentage}%\n\n"
-        )
-        if eligible:
-            msg += f"Result: You are ELIGIBLE for the {self.test_department} department.\n(Pass mark: {PASS_MARK}%)"
-        else:
-            msg += f"Result: You did not reach the pass mark of {PASS_MARK}%.\nYou may retake the test later or try another department."
+        # Show detailed results + corrections immediately
+        self.show_results_review(score, total, percentage)
 
-        messagebox.showinfo("Test Result", msg)
-        self.show_home()
+    def show_results_review(self, score, total, percentage):
+        """Display score summary and full question-by-question corrections."""
+        self.clear()
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        eligible = percentage >= PASS_MARK
+
+        # ---- Summary header ----
+        header = ctk.CTkFrame(self)
+        header.grid(row=0, column=0, sticky="ew", padx=15, pady=(15, 5))
+        header.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            header, text="Test Completed — Results & Corrections",
+            font=ctk.CTkFont(size=20, weight="bold")
+        ).pack(anchor="w", padx=10, pady=(10, 5))
+
+        summary_color = "#27ae60" if eligible else "#c0392b"
+        summary_text = (
+            f"Department: {self.test_department}   |   "
+            f"Score: {score} / {total}   |   "
+            f"{percentage}%   |   "
+            f"{'ELIGIBLE' if eligible else 'NOT ELIGIBLE'}"
+        )
+        ctk.CTkLabel(
+            header, text=summary_text,
+            font=ctk.CTkFont(size=14, weight="bold"),
+            text_color=summary_color
+        ).pack(anchor="w", padx=10, pady=(0, 10))
+
+        # ---- Scrollable corrections ----
+        scroll = ctk.CTkScrollableFrame(self)
+        scroll.grid(row=1, column=0, sticky="nsew", padx=15, pady=5)
+        scroll.grid_columnconfigure(0, weight=1)
+
+        option_keys = {"A": "option_a", "B": "option_b", "C": "option_c", "D": "option_d"}
+
+        for i, q in enumerate(self.test_questions, start=1):
+            student_ans = self.current_answers.get(q["id"])  # may be None
+            correct = q["correct_option"]
+            is_correct = student_ans == correct
+
+            card = ctk.CTkFrame(scroll, corner_radius=8)
+            card.pack(fill="x", pady=6, padx=5)
+            card.grid_columnconfigure(0, weight=1)
+
+            # Status badge
+            if student_ans is None:
+                status = "○ Not answered"
+                status_color = "#7f8c8d"
+            elif is_correct:
+                status = "✓ Correct"
+                status_color = "#27ae60"
+            else:
+                status = "✗ Wrong"
+                status_color = "#c0392b"
+
+            top_row = ctk.CTkFrame(card, fg_color="transparent")
+            top_row.pack(fill="x", padx=12, pady=(10, 2))
+
+            ctk.CTkLabel(
+                top_row, text=f"Q{i}. {q['question_text']}",
+                font=ctk.CTkFont(size=14, weight="bold"),
+                wraplength=650, justify="left"
+            ).pack(side="left", anchor="w")
+
+            ctk.CTkLabel(
+                top_row, text=status,
+                font=ctk.CTkFont(size=13, weight="bold"),
+                text_color=status_color
+            ).pack(side="right", padx=8)
+
+            # Show all options with highlighting
+            for letter in "ABCD":
+                opt_text = q[option_keys[letter]]
+                prefix = f"{letter}. {opt_text}"
+
+                if letter == correct and letter == student_ans:
+                    # Student got it right
+                    label_color = "#27ae60"
+                    prefix = f"✓ {prefix}  (your answer — correct)"
+                elif letter == correct:
+                    # Correct answer (student missed it)
+                    label_color = "#27ae60"
+                    prefix = f"→ {prefix}  (correct answer)"
+                elif letter == student_ans:
+                    # Student's wrong choice
+                    label_color = "#c0392b"
+                    prefix = f"✗ {prefix}  (your answer)"
+                else:
+                    label_color = None
+                    # normal option
+
+                lbl = ctk.CTkLabel(
+                    card, text=prefix,
+                    font=ctk.CTkFont(size=13),
+                    text_color=label_color,
+                    wraplength=650, justify="left"
+                )
+                lbl.pack(anchor="w", padx=20, pady=1)
+
+            # Spacer at bottom of card
+            ctk.CTkLabel(card, text="", height=6).pack()
+
+        # ---- Bottom button ----
+        bottom = ctk.CTkFrame(self, fg_color="transparent")
+        bottom.grid(row=2, column=0, sticky="ew", padx=15, pady=15)
+
+        ctk.CTkButton(
+            bottom, text="Back to Home",
+            width=200, height=40,
+            command=self.show_home
+        ).pack()
