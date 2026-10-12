@@ -10,6 +10,9 @@ DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "placement_te
 
 DEPARTMENTS = ["Science", "Art", "Commercial"]
 
+# Default exam duration in minutes (can be changed in Settings)
+DEFAULT_EXAM_MINUTES = 30
+
 def get_connection():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -68,7 +71,24 @@ def init_db():
         )
     """)
 
+    # Simple key-value settings
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    """)
+
     conn.commit()
+
+    # Default settings
+    cur.execute("SELECT COUNT(*) FROM settings WHERE key = 'exam_minutes'")
+    if cur.fetchone()[0] == 0:
+        cur.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?)",
+            ("exam_minutes", str(DEFAULT_EXAM_MINUTES))
+        )
+        conn.commit()
 
     # Create default admin if none exists
     cur.execute("SELECT COUNT(*) FROM users WHERE role = 'admin'")
@@ -80,6 +100,30 @@ def init_db():
         conn.commit()
 
     conn.close()
+
+def get_setting(key: str, default: str = "") -> str:
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT value FROM settings WHERE key = ?", (key,))
+    row = cur.fetchone()
+    conn.close()
+    return row["value"] if row else default
+
+def set_setting(key: str, value: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, str(value))
+    )
+    conn.commit()
+    conn.close()
+
+def get_exam_minutes() -> int:
+    try:
+        return int(get_setting("exam_minutes", str(DEFAULT_EXAM_MINUTES)))
+    except ValueError:
+        return DEFAULT_EXAM_MINUTES
 
 def authenticate(username: str, password: str):
     conn = get_connection()
@@ -103,10 +147,32 @@ def add_student(username: str, password: str, full_name: str, admission_no: str)
         )
         conn.commit()
         return True, "Student added successfully"
-    except sqlite3.IntegrityError as e:
-        return False, f"Error: username or admission number already exists"
+    except sqlite3.IntegrityError:
+        return False, "Error: username or admission number already exists"
     finally:
         conn.close()
+
+def bulk_add_students(rows: list) -> tuple:
+    """
+    rows: list of dicts with keys: username, password, full_name, admission_no
+    Returns: (success_count, fail_count, error_messages)
+    """
+    ok = 0
+    fail = 0
+    errors = []
+    for i, row in enumerate(rows, start=1):
+        success, msg = add_student(
+            row.get("username", ""),
+            row.get("password", ""),
+            row.get("full_name", ""),
+            row.get("admission_no", "")
+        )
+        if success:
+            ok += 1
+        else:
+            fail += 1
+            errors.append(f"Row {i}: {msg}")
+    return ok, fail, errors
 
 def update_student(student_id: int, full_name: str, admission_no: str, password: str = None):
     conn = get_connection()
@@ -267,3 +333,42 @@ def get_question_count_by_dept():
     result = {r["department"]: r["cnt"] for r in cur.fetchall()}
     conn.close()
     return result
+
+def get_analytics():
+    """Return summary statistics for the admin dashboard."""
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("SELECT COUNT(*) FROM users WHERE role='student'")
+    total_students = cur.fetchone()[0]
+
+    cur.execute("SELECT COUNT(*) FROM attempts")
+    total_attempts = cur.fetchone()[0]
+
+    # Per department stats
+    dept_stats = {}
+    for dept in DEPARTMENTS:
+        cur.execute(
+            """SELECT COUNT(*), AVG(percentage),
+                      SUM(CASE WHEN percentage >= 50 THEN 1 ELSE 0 END)
+               FROM attempts WHERE department = ?""",
+            (dept,)
+        )
+        row = cur.fetchone()
+        count = row[0] or 0
+        avg = round(row[1], 1) if row[1] is not None else 0
+        passed = row[2] or 0
+        pass_rate = round((passed / count) * 100, 1) if count > 0 else 0
+        dept_stats[dept] = {
+            "attempts": count,
+            "average": avg,
+            "passed": passed,
+            "pass_rate": pass_rate,
+        }
+
+    conn.close()
+    return {
+        "total_students": total_students,
+        "total_attempts": total_attempts,
+        "departments": dept_stats,
+    }
