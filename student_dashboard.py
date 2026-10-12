@@ -1,7 +1,8 @@
 """Student dashboard for SS1 Placement Test — preferred department selection"""
 import customtkinter as ctk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 import json
+from datetime import datetime
 
 from database import (
     get_questions_by_department, save_attempt, get_student_attempts,
@@ -9,6 +10,7 @@ from database import (
 )
 
 PASS_MARK = 50
+SCHOOL_NAME = "Lagos State Senior Model College Ojo"
 
 
 class StudentDashboard(ctk.CTkFrame):
@@ -25,6 +27,10 @@ class StudentDashboard(ctk.CTkFrame):
         self.test_department = None
         self.timer_remaining = 0
         self.timer_id = None
+        # Stored after submit for print / retry
+        self.last_score = 0
+        self.last_total = 0
+        self.last_percentage = 0.0
 
         self.show_home()
 
@@ -238,6 +244,10 @@ class StudentDashboard(ctk.CTkFrame):
             self.user["id"], self.test_department, score, total, answers_json
         )
 
+        self.last_score = score
+        self.last_total = total
+        self.last_percentage = percentage
+
         # Show detailed results + corrections immediately
         self.show_results_review(score, total, percentage)
 
@@ -320,20 +330,16 @@ class StudentDashboard(ctk.CTkFrame):
                 prefix = f"{letter}. {opt_text}"
 
                 if letter == correct and letter == student_ans:
-                    # Student got it right
                     label_color = "#27ae60"
                     prefix = f"✓ {prefix}  (your answer — correct)"
                 elif letter == correct:
-                    # Correct answer (student missed it)
                     label_color = "#27ae60"
                     prefix = f"→ {prefix}  (correct answer)"
                 elif letter == student_ans:
-                    # Student's wrong choice
                     label_color = "#c0392b"
                     prefix = f"✗ {prefix}  (your answer)"
                 else:
                     label_color = None
-                    # normal option
 
                 lbl = ctk.CTkLabel(
                     card, text=prefix,
@@ -343,15 +349,129 @@ class StudentDashboard(ctk.CTkFrame):
                 )
                 lbl.pack(anchor="w", padx=20, pady=1)
 
-            # Spacer at bottom of card
             ctk.CTkLabel(card, text="", height=6).pack()
 
-        # ---- Bottom button ----
+        # ---- Bottom buttons: Retry | Print | Home ----
         bottom = ctk.CTkFrame(self, fg_color="transparent")
         bottom.grid(row=2, column=0, sticky="ew", padx=15, pady=15)
 
         ctk.CTkButton(
+            bottom, text="🔄 Retry Exam",
+            width=160, height=40,
+            fg_color="#2980b9", hover_color="#1f6dad",
+            command=self.retry_exam
+        ).pack(side="left", padx=5)
+
+        ctk.CTkButton(
+            bottom, text="🖨 Print / Save Results",
+            width=180, height=40,
+            fg_color="#8e44ad", hover_color="#7d3c98",
+            command=self.print_results
+        ).pack(side="left", padx=5)
+
+        ctk.CTkButton(
             bottom, text="Back to Home",
-            width=200, height=40,
+            width=160, height=40,
             command=self.show_home
-        ).pack()
+        ).pack(side="right", padx=5)
+
+    def retry_exam(self):
+        """Let the student retake the same department exam."""
+        dept = self.test_department
+        if not dept:
+            self.show_home()
+            return
+        if messagebox.askyesno(
+            "Retry Exam",
+            f"Retake the {dept} placement test?\n\n"
+            "Your previous attempt is already saved.\n"
+            "A new attempt will be recorded when you finish."
+        ):
+            self.start_test(dept)
+
+    def print_results(self):
+        """Build a text report and let the student save it (printable)."""
+        score = self.last_score
+        total = self.last_total
+        percentage = self.last_percentage
+        eligible = percentage >= PASS_MARK
+        option_keys = {"A": "option_a", "B": "option_b", "C": "option_c", "D": "option_d"}
+
+        lines = []
+        lines.append("=" * 60)
+        lines.append(f"  {SCHOOL_NAME}")
+        lines.append("  SS1 Placement Test — Results & Corrections")
+        lines.append("=" * 60)
+        lines.append("")
+        lines.append(f"Student Name : {self.user.get('full_name', '')}")
+        lines.append(f"Admission No : {self.user.get('admission_no') or 'N/A'}")
+        lines.append(f"Department   : {self.test_department}")
+        lines.append(f"Date         : {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+        lines.append("")
+        lines.append(f"Score        : {score} / {total}")
+        lines.append(f"Percentage   : {percentage}%")
+        lines.append(f"Pass Mark    : {PASS_MARK}%")
+        lines.append(f"Result       : {'ELIGIBLE' if eligible else 'NOT ELIGIBLE'}")
+        lines.append("")
+        lines.append("-" * 60)
+        lines.append("QUESTION REVIEW")
+        lines.append("-" * 60)
+
+        for i, q in enumerate(self.test_questions, start=1):
+            student_ans = self.current_answers.get(q["id"])
+            correct = q["correct_option"]
+            if student_ans is None:
+                status = "NOT ANSWERED"
+            elif student_ans == correct:
+                status = "CORRECT"
+            else:
+                status = "WRONG"
+
+            lines.append("")
+            lines.append(f"Q{i}. {q['question_text']}")
+            lines.append(f"    Status: {status}")
+            for letter in "ABCD":
+                opt = q[option_keys[letter]]
+                mark = ""
+                if letter == correct:
+                    mark = "  ← CORRECT ANSWER"
+                if letter == student_ans:
+                    mark += "  ← YOUR ANSWER"
+                lines.append(f"    {letter}. {opt}{mark}")
+
+        lines.append("")
+        lines.append("=" * 60)
+        report = "\n".join(lines)
+
+        # Preview window + save
+        win = ctk.CTkToplevel(self)
+        win.title("Print / Save Results")
+        win.geometry("640x520")
+        win.transient(self.winfo_toplevel())
+
+        ctk.CTkLabel(
+            win, text="Results Report (ready to print or save)",
+            font=ctk.CTkFont(size=15, weight="bold")
+        ).pack(pady=(12, 6))
+
+        text = ctk.CTkTextbox(win, width=600, height=380, font=ctk.CTkFont(family="Courier", size=12))
+        text.pack(padx=15, pady=5)
+        text.insert("1.0", report)
+        text.configure(state="disabled")
+
+        def do_save():
+            path = filedialog.asksaveasfilename(
+                title="Save Results Report",
+                defaultextension=".txt",
+                filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+                initialfile=f"result_{self.user.get('admission_no') or self.user['id']}_{self.test_department}.txt"
+            )
+            if path:
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(report)
+                messagebox.showinfo("Saved", f"Report saved to:\n{path}\n\nYou can open it and print from any text editor.")
+
+        btn_row = ctk.CTkFrame(win, fg_color="transparent")
+        btn_row.pack(pady=10)
+        ctk.CTkButton(btn_row, text="Save as File (then print)", width=200, command=do_save).pack(side="left", padx=8)
+        ctk.CTkButton(btn_row, text="Close", width=100, command=win.destroy).pack(side="left", padx=8)
