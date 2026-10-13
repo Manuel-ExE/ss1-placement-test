@@ -1,26 +1,49 @@
-# SS1 Department Placement Test System
-**Lagos State Senior Model College, Ojo**
+# SS1 Placement Test — Lagos State Senior Model College Ojo
 
-Modern offline-first placement examination system for placing SS1 students into **Science**, **Art**, and **Commercial** departments.
+Desktop placement test for SS1 students. Students choose a preferred department and take questions set by the department HOD.
 
-## Features
+## Roles
 
-- Beautiful modern UI (navy & teal design)
-- Teacher (Admin) portal: students, questions, exams, results, analytics, settings
-- Student portal: take timed placement exams
-- Offline-first (IndexedDB) — no internet required after install
-- Proper Windows **Setup.exe** installer
-- Dark mode support
-- Import/export, backup, printable reports
+| Role | Username (default) | Password | Responsibility |
+|------|--------------------|----------|----------------|
+| HOD of Science | `hod_science` | `science123` | Set Science questions |
+| HOD of Humanities | `hod_humanities` | `humanities123` | Set Art / Humanities questions |
+| HOD of Business | `hod_business` | `business123` | Set Commercial / Business questions |
+| Teacher | `teacher` | `teacher123` | Create & manage students |
+| Student | (created by teacher) | (set by teacher) | Choose department & take test |
 
-## First run
+**Change default passwords after first login.**
 
-On first launch the app asks you to **create the administrator account**.
-There is no default password — you set it yourself.
+## Question format (HODs)
 
-## Build Windows Installer
+```
+What is photosynthesis
+A  Plants make their food using sunlight
+B  Car
+C  Sun
+D  Moon
+Answer: A
+```
 
-1. Go to **Actions** → **Build Windows Installer** → **Run workflow**
-2. Download the artifact `SS1_Placement_Test_Setup`
+## Student fields (Teacher)
 
-Or open `index.html` directly in Chrome/Edge to use the app in the browser (fully offline).
+- Full name, admission number, username, password  
+- State, LGA, date of birth, sex, parents’ phone number  
+
+## Run
+
+```bash
+pip install -r requirements.txt
+python app.py
+```
+
+If you previously used an older version of this app, delete `placement_test.db` once so the new roles and columns are created cleanly.
+
+## Build Windows EXE
+
+```bat
+pip install pyinstaller customtkinter
+pyinstaller --noconfirm --onefile --windowed --name SS1_Placement_Test app.py
+```
+
+Then use Inno Setup with `installer.iss` for a Setup installer.
