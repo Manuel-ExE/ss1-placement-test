@@ -6,7 +6,7 @@ from datetime import datetime
 
 from database import (
     add_student, update_student, delete_student,
-    get_all_students, get_student_by_id, get_all_attempts,
+    get_all_students, get_student_by_id, get_all_attempts, get_attempts_by_department,
     bulk_add_students, change_password, get_analytics,
     get_question_count_by_dept, DEPARTMENTS, PASS_MARK
 )
@@ -40,7 +40,7 @@ class TeacherDashboard(ctk.CTkFrame):
         for i, (text, cmd) in enumerate([
             ("Dashboard", self.show_dashboard),
             ("Manage Students", self.show_students),
-            ("View All Results", self.show_results),
+            ("Scores by Subject", self.show_results),
             ("Change Password", self.show_change_password),
         ], start=2):
             ctk.CTkButton(sidebar, text=text, command=cmd, width=170, anchor="w").grid(
@@ -294,23 +294,38 @@ class TeacherDashboard(ctk.CTkFrame):
         frame = ctk.CTkFrame(self.content)
         frame.grid(row=0, column=0, sticky="nsew", padx=15, pady=15)
         frame.grid_columnconfigure(0, weight=1)
-        frame.grid_rowconfigure(1, weight=1)
+        frame.grid_rowconfigure(2, weight=1)
 
         top = ctk.CTkFrame(frame, fg_color="transparent")
-        top.grid(row=0, column=0, sticky="ew", pady=(0, 10))
-        ctk.CTkLabel(top, text="All Test Results", font=ctk.CTkFont(size=20, weight="bold")).pack(side="left")
+        top.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        ctk.CTkLabel(top, text="Student Scores", font=ctk.CTkFont(size=20, weight="bold")).pack(side="left")
+
+        ctk.CTkLabel(top, text="Subject:", font=ctk.CTkFont(size=13)).pack(side="left", padx=(20, 5))
+        self.subject_filter = ctk.CTkComboBox(
+            top,
+            values=["All Subjects", "Science", "Art (Humanities)", "Commercial (Business)"],
+            width=200,
+            command=lambda _: self.refresh_results()
+        )
+        self.subject_filter.set("All Subjects")
+        self.subject_filter.pack(side="left", padx=5)
+
         ctk.CTkButton(top, text="Export CSV", command=self.export_results).pack(side="right", padx=5)
 
+        self.score_summary = ctk.CTkFrame(frame, corner_radius=8)
+        self.score_summary.grid(row=1, column=0, sticky="ew", pady=(0, 10))
+        self.score_summary.grid_columnconfigure((0, 1, 2, 3), weight=1)
+
         tree_frame = ctk.CTkFrame(frame)
-        tree_frame.grid(row=1, column=0, sticky="nsew")
+        tree_frame.grid(row=2, column=0, sticky="nsew")
         tree_frame.grid_columnconfigure(0, weight=1)
         tree_frame.grid_rowconfigure(0, weight=1)
 
-        cols = ("id", "student", "admission", "department", "score", "pct", "date")
-        self.results_tree = ttk.Treeview(tree_frame, columns=cols, show="headings", height=16)
+        cols = ("id", "student", "admission", "department", "score", "pct", "status", "date")
+        self.results_tree = ttk.Treeview(tree_frame, columns=cols, show="headings", height=14)
         for col, h, w in zip(cols,
-                             ["ID", "Student", "Admission No", "Department", "Score", "%", "Date"],
-                             [40, 160, 110, 100, 70, 55, 130]):
+                             ["ID", "Student", "Admission No", "Subject", "Score", "%", "Status", "Date"],
+                             [40, 150, 100, 110, 70, 55, 90, 120]):
             self.results_tree.heading(col, text=h)
             self.results_tree.column(col, width=w)
         self.results_tree.grid(row=0, column=0, sticky="nsew")
@@ -320,26 +335,78 @@ class TeacherDashboard(ctk.CTkFrame):
 
         self.refresh_results()
 
+    def _filter_dept_key(self):
+        val = self.subject_filter.get() if hasattr(self, "subject_filter") else "All Subjects"
+        mapping = {
+            "All Subjects": None,
+            "Science": "Science",
+            "Art (Humanities)": "Art",
+            "Commercial (Business)": "Commercial",
+        }
+        return mapping.get(val)
+
     def refresh_results(self):
         for item in self.results_tree.get_children():
             self.results_tree.delete(item)
-        for a in get_all_attempts():
+
+        dept = self._filter_dept_key()
+        if dept:
+            attempts = get_attempts_by_department(dept)
+        else:
+            attempts = get_all_attempts()
+
+        for w in self.score_summary.winfo_children():
+            w.destroy()
+
+        total = len(attempts)
+        if total:
+            avg = round(sum(a["percentage"] for a in attempts) / total, 1)
+            passed = sum(1 for a in attempts if a["percentage"] >= PASS_MARK)
+            failed = total - passed
+        else:
+            avg = passed = failed = 0
+
+        summary_items = [
+            ("Attempts", str(total), "#3498db"),
+            ("Average Score", f"{avg}%", "#9b59b6"),
+            ("Passed (≥50%)", str(passed), "#27ae60"),
+            ("Failed", str(failed), "#c0392b"),
+        ]
+        for i, (title, value, color) in enumerate(summary_items):
+            box = ctk.CTkFrame(self.score_summary, fg_color=color, corner_radius=8)
+            box.grid(row=0, column=i, padx=6, pady=8, sticky="ew")
+            ctk.CTkLabel(box, text=value, font=ctk.CTkFont(size=20, weight="bold"),
+                         text_color="white").pack(pady=(8, 0))
+            ctk.CTkLabel(box, text=title, font=ctk.CTkFont(size=11),
+                         text_color="white").pack(pady=(0, 8))
+
+        dept_labels = {
+            "Science": "Science",
+            "Art": "Humanities",
+            "Commercial": "Business",
+        }
+        for a in attempts:
+            status = "Eligible" if a["percentage"] >= PASS_MARK else "Not eligible"
             self.results_tree.insert("", "end", values=(
                 a["id"], a["full_name"], a["admission_no"] or "",
-                a["department"], f"{a['score']}/{a['total_questions']}",
+                dept_labels.get(a["department"], a["department"]),
+                f"{a['score']}/{a['total_questions']}",
                 f"{a['percentage']}%",
+                status,
                 a["taken_at"][:16] if a["taken_at"] else ""
             ))
 
     def export_results(self):
+        dept = self._filter_dept_key() if hasattr(self, "subject_filter") else None
+        tag = dept or "all"
         path = filedialog.asksaveasfilename(
             title="Export Results", defaultextension=".csv",
             filetypes=[("CSV files", "*.csv")],
-            initialfile=f"all_results_{datetime.now().strftime('%Y%m%d')}.csv"
+            initialfile=f"results_{tag}_{datetime.now().strftime('%Y%m%d')}.csv"
         )
         if not path:
             return
-        attempts = get_all_attempts()
+        attempts = get_attempts_by_department(dept) if dept else get_all_attempts()
         with open(path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow(["id", "student_name", "admission_no", "department",
