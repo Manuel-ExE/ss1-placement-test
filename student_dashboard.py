@@ -6,13 +6,17 @@ from datetime import datetime
 
 from database import (
     get_questions_by_department, save_attempt, get_student_attempts,
-    DEPARTMENTS, get_exam_minutes
+    DEPARTMENTS, get_exam_minutes, PASS_MARK
 )
 
-PASS_MARK = 50
 SCHOOL_NAME = "Lagos State Senior Model College Ojo"
 
-# HOD remarks shown after a student finishes a department exam
+DEPT_LABELS = {
+    "Science": "Science",
+    "Art": "Humanities (Art)",
+    "Commercial": "Business (Commercial)",
+}
+
 HOD_REMARKS = {
     "Science": {
         "title": "HOD of Science",
@@ -99,7 +103,7 @@ class StudentDashboard(ctk.CTkFrame):
             font=ctk.CTkFont(size=16, weight="bold")
         ).pack(pady=(0, 5))
         ctk.CTkLabel(
-            frame, text="You will receive questions based on the department you select.",
+            frame, text="You will receive questions set by the HOD of that department.",
             font=ctk.CTkFont(size=13), text_color="gray"
         ).pack(pady=(0, 20))
 
@@ -111,9 +115,10 @@ class StudentDashboard(ctk.CTkFrame):
 
         for dept in DEPARTMENTS:
             questions = get_questions_by_department(dept)
-            btn_text = f"{dept}  ({len(questions)} questions)"
+            label = DEPT_LABELS.get(dept, dept)
+            btn_text = f"{label}  ({len(questions)} questions)"
             ctk.CTkButton(
-                frame, text=btn_text, width=300, height=40,
+                frame, text=btn_text, width=320, height=40,
                 command=lambda d=dept: self.start_test(d)
             ).pack(pady=8)
 
@@ -122,9 +127,10 @@ class StudentDashboard(ctk.CTkFrame):
             ctk.CTkLabel(frame, text="Your Previous Results", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(25, 8))
             for a in attempts[:5]:
                 eligible = "✓ Eligible" if a["percentage"] >= PASS_MARK else "✗ Not eligible"
+                label = DEPT_LABELS.get(a["department"], a["department"])
                 ctk.CTkLabel(
                     frame,
-                    text=f"{a['department']}: {a['score']}/{a['total_questions']} ({a['percentage']}%) — {eligible}",
+                    text=f"{label}: {a['score']}/{a['total_questions']} ({a['percentage']}%) — {eligible}",
                     font=ctk.CTkFont(size=13)
                 ).pack()
 
@@ -135,13 +141,14 @@ class StudentDashboard(ctk.CTkFrame):
 
     def start_test(self, department):
         questions = get_questions_by_department(department)
+        label = DEPT_LABELS.get(department, department)
         if not questions:
-            messagebox.showwarning("No Questions", f"No questions available for {department} yet.")
+            messagebox.showwarning("No Questions", f"No questions available for {label} yet.")
             return
         if not messagebox.askyesno(
             "Start Test",
-            f"You chose {department} as your preferred department.\n\n"
-            f"Start the placement test for {department}?\n\n"
+            f"You chose {label} as your preferred department.\n\n"
+            f"Start the placement test?\n\n"
             f"Questions: {len(questions)}\n"
             f"Time limit: {get_exam_minutes()} minutes\n"
             f"Pass mark: {PASS_MARK}%"
@@ -165,8 +172,9 @@ class StudentDashboard(ctk.CTkFrame):
         top.grid(row=0, column=0, sticky="ew", padx=10, pady=5)
         top.grid_columnconfigure(1, weight=1)
 
+        label = DEPT_LABELS.get(self.test_department, self.test_department)
         ctk.CTkLabel(
-            top, text=f"{self.test_department} Placement Test",
+            top, text=f"{label} Placement Test",
             font=ctk.CTkFont(size=16, weight="bold")
         ).grid(row=0, column=0, padx=10)
 
@@ -293,6 +301,7 @@ class StudentDashboard(ctk.CTkFrame):
         self.grid_rowconfigure(1, weight=1)
 
         eligible = percentage >= PASS_MARK
+        label = DEPT_LABELS.get(self.test_department, self.test_department)
 
         header = ctk.CTkFrame(self)
         header.grid(row=0, column=0, sticky="ew", padx=15, pady=(15, 5))
@@ -305,7 +314,7 @@ class StudentDashboard(ctk.CTkFrame):
 
         summary_color = "#27ae60" if eligible else "#c0392b"
         summary_text = (
-            f"Department: {self.test_department}   |   "
+            f"Department: {label}   |   "
             f"Score: {score} / {total}   |   "
             f"{percentage}%   |   "
             f"{'ELIGIBLE' if eligible else 'NOT ELIGIBLE'}"
@@ -410,9 +419,10 @@ class StudentDashboard(ctk.CTkFrame):
         if not dept:
             self.show_home()
             return
+        label = DEPT_LABELS.get(dept, dept)
         if messagebox.askyesno(
             "Retry Exam",
-            f"Retake the {dept} placement test?\n\n"
+            f"Retake the {label} placement test?\n\n"
             "Your previous attempt is already saved.\n"
             "A new attempt will be recorded when you finish."
         ):
@@ -424,6 +434,7 @@ class StudentDashboard(ctk.CTkFrame):
         percentage = self.last_percentage
         eligible = percentage >= PASS_MARK
         option_keys = {"A": "option_a", "B": "option_b", "C": "option_c", "D": "option_d"}
+        label = DEPT_LABELS.get(self.test_department, self.test_department)
 
         lines = []
         lines.append("=" * 60)
@@ -433,7 +444,7 @@ class StudentDashboard(ctk.CTkFrame):
         lines.append("")
         lines.append(f"Student Name : {self.user.get('full_name', '')}")
         lines.append(f"Admission No : {self.user.get('admission_no') or 'N/A'}")
-        lines.append(f"Department   : {self.test_department}")
+        lines.append(f"Department   : {label}")
         lines.append(f"Date         : {datetime.now().strftime('%Y-%m-%d %H:%M')}")
         lines.append("")
         lines.append(f"Score        : {score} / {total}")
