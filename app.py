@@ -1,33 +1,22 @@
 """
 Lagos State Senior Model College Ojo
 SS1 Placement Test Application
-Science | Art | Commercial
+
+Roles: HOD Science | HOD Humanities | HOD Business | Teacher | Student
 """
 import customtkinter as ctk
-from tkinter import messagebox, ttk, filedialog
-import json
-import csv
-import os
-from datetime import datetime
+from tkinter import messagebox
 
-from admin_dashboard import AdminDashboard
+from database import init_db, authenticate, ROLE_LABELS, HOD_DEPARTMENT
+from hod_dashboard import HODDashboard
+from teacher_dashboard import TeacherDashboard
 from student_dashboard import StudentDashboard
-from database import (
-    init_db, authenticate, add_student, update_student, delete_student,
-    get_all_students, get_student_by_id, add_question, update_question,
-    delete_question, get_questions_by_department, get_all_questions,
-    save_attempt, get_student_attempts, get_all_attempts, change_password,
-    get_question_count_by_dept, DEPARTMENTS,
-    bulk_add_students, get_analytics, get_exam_minutes, set_setting
-)
 
-# Appearance
 ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("blue")
 
 SCHOOL_NAME = "Lagos State Senior Model College Ojo"
 APP_TITLE = f"{SCHOOL_NAME} — SS1 Placement Test"
-PASS_MARK = 50  # percentage needed to be considered eligible for the stream
 
 
 class LoginFrame(ctk.CTkFrame):
@@ -36,17 +25,13 @@ class LoginFrame(ctk.CTkFrame):
         self.on_login_success = on_login_success
         self.grid_columnconfigure(0, weight=1)
 
-        header = ctk.CTkLabel(
-            self, text=SCHOOL_NAME,
-            font=ctk.CTkFont(size=22, weight="bold")
-        )
-        header.grid(row=0, column=0, pady=(40, 5), padx=20)
+        ctk.CTkLabel(
+            self, text=SCHOOL_NAME, font=ctk.CTkFont(size=22, weight="bold")
+        ).grid(row=0, column=0, pady=(40, 5), padx=20)
 
-        sub = ctk.CTkLabel(
-            self, text="SS1 Placement Test System",
-            font=ctk.CTkFont(size=16)
-        )
-        sub.grid(row=1, column=0, pady=(0, 30))
+        ctk.CTkLabel(
+            self, text="SS1 Placement Test System", font=ctk.CTkFont(size=16)
+        ).grid(row=1, column=0, pady=(0, 30))
 
         card = ctk.CTkFrame(self)
         card.grid(row=2, column=0, padx=40, pady=10, sticky="ew")
@@ -64,17 +49,26 @@ class LoginFrame(ctk.CTkFrame):
         self.password_entry = ctk.CTkEntry(card, width=280, show="•", placeholder_text="Enter password")
         self.password_entry.grid(row=4, column=0, padx=30, pady=(0, 15))
 
-        self.login_btn = ctk.CTkButton(card, text="Login", width=280, command=self.do_login)
-        self.login_btn.grid(row=5, column=0, padx=30, pady=(0, 25))
+        ctk.CTkButton(card, text="Login", width=280, command=self.do_login).grid(
+            row=5, column=0, padx=30, pady=(0, 25)
+        )
 
         self.password_entry.bind("<Return>", lambda e: self.do_login())
         self.username_entry.bind("<Return>", lambda e: self.password_entry.focus())
 
         note = ctk.CTkLabel(
             self,
-            text="Default Admin → username: admin  |  password: admin123\nPlease change the password after first login.",
-            font=ctk.CTkFont(size=12),
-            text_color="gray"
+            text=(
+                "Staff accounts (change password after first login):\n"
+                "HOD Science → hod_science / science123\n"
+                "HOD Humanities → hod_humanities / humanities123\n"
+                "HOD Business → hod_business / business123\n"
+                "Teacher → teacher / teacher123\n"
+                "Students use the username & password given by the Teacher."
+            ),
+            font=ctk.CTkFont(size=11),
+            text_color="gray",
+            justify="left",
         )
         note.grid(row=3, column=0, pady=20)
 
@@ -95,8 +89,8 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title(APP_TITLE)
-        self.geometry("960x640")
-        self.minsize(800, 560)
+        self.geometry("1000x680")
+        self.minsize(860, 580)
 
         init_db()
 
@@ -119,10 +113,19 @@ class App(ctk.CTk):
     def on_login_success(self, user):
         self.current_user = user
         self.clear()
-        if user["role"] == "admin":
-            dash = AdminDashboard(self, user, self.show_login)
-        else:
+        role = user["role"]
+
+        if role in HOD_DEPARTMENT:
+            dash = HODDashboard(self, user, self.show_login)
+        elif role == "teacher":
+            dash = TeacherDashboard(self, user, self.show_login)
+        elif role == "student":
             dash = StudentDashboard(self, user, self.show_login)
+        else:
+            messagebox.showerror("Unknown Role", f"Unsupported role: {role}")
+            self.show_login()
+            return
+
         dash.grid(row=0, column=0, sticky="nsew")
 
 
